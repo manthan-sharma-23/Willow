@@ -15,6 +15,8 @@ contract Escrow {
     mapping(uint256 => uint256) public purchasePrice;
     mapping(uint256 => uint256) public escrowAmount;
     mapping(uint256 => address) public buyer;
+    mapping(uint256 => bool) public inspectionPassed;
+    mapping(uint256 => mapping(address => bool)) public approval;
 
     modifier onlySeller() {
         require(msg.sender == seller, "Only seller controls this method");
@@ -67,5 +69,31 @@ contract Escrow {
 
     function getBalance() public view returns (uint256) {
         return address(this).balance;
+    }
+
+    function approveSale(uint256 _nftId) public {
+        approval[_nftId][msg.sender] = true;
+    }
+
+    function updateInspectionStatus(
+        uint256 _nftId,
+        bool _passed
+    ) public onlyInspector {
+        inspectionPassed[_nftId] = _passed;
+    }
+
+    function finalizeSale(uint256 _nftId) public {
+        require(inspectionPassed[_nftId]);
+        require(approval[_nftId][buyer[_nftId]]);
+        require(approval[_nftId][seller]);
+        require(approval[_nftId][lender]);
+        require(address(this).balance >= purchasePrice[_nftId]);
+
+        (bool success, ) = payable(seller).call{value: address(this).balance}(
+            ""
+        );
+        require(success);
+
+        IERC721(nftAddress).transferFrom(address(this), buyer[_nftId], _nftId);
     }
 }
